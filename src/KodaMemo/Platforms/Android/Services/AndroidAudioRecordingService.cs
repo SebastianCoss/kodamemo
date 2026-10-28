@@ -145,21 +145,18 @@ public class AndroidAudioRecordingService : IAudioRecordingService, IMicrophoneA
         }
     }
 
+    /// <summary>Requests microphone access on the UI thread before starting capture.</summary>
     public async Task<bool> EnsurePermissionsAsync()
     {
         var micStatus = await Permissions.CheckStatusAsync<Permissions.Microphone>();
         if (micStatus != PermissionStatus.Granted)
         {
-            // Verificar también a nivel de Android Context por si fue revocado vía ADB/Ajustes
-            if (AndroidX.Core.Content.ContextCompat.CheckSelfPermission(
-                    global::Android.App.Application.Context,
-                    global::Android.Manifest.Permission.RecordAudio) != Permission.Granted)
-            {
-                return false;
-            }
+            micStatus = await MainThread.InvokeOnMainThreadAsync(
+                () => Permissions.RequestAsync<Permissions.Microphone>());
         }
 
-        if (AndroidX.Core.Content.ContextCompat.CheckSelfPermission(
+        if (micStatus != PermissionStatus.Granted ||
+            AndroidX.Core.Content.ContextCompat.CheckSelfPermission(
                 global::Android.App.Application.Context,
                 global::Android.Manifest.Permission.RecordAudio) != Permission.Granted)
         {
