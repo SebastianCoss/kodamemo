@@ -1,0 +1,1520 @@
+@page "/"
+@inject WebMeetingStoreService Store
+@inject NavigationManager Nav
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider Authentication
+
+<div class="app-layout" style="--font-scale: @FontScaleCss;">
+    <!-- =================================================================== -->
+    <!-- NAVEGACIÓN LATERAL SENCILLA (WEB) -->
+    <!-- =================================================================== -->
+    <aside class="web-sidebar" aria-label="Navegación principal">
+        <div>
+            <div class="brand-lockup">
+                <div class="brand-logo" aria-hidden="true">🎙</div>
+                <div>
+                    <div class="heading-font" style="font-size:calc(17px * var(--font-scale)); font-weight:800; color:var(--brand-teal); line-height:1.15;">
+                        KodaMemo
+                    </div>
+                    <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted);">
+                        Grabadora y Reuniones
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botón Principal Reconocible: Grabar Reunión -->
+            <button class="btn btn-coral btn-lg"
+                    style="width:100%; margin-bottom:18px;"
+                    @onclick="StartOrOpenWebRecorder">
+                <span>🎙</span>
+                <span>@(WebRecorderFlowStage == "recording" ? "Ver grabación activa" : "Grabar reunión")</span>
+            </button>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item @(ActiveView == "dashboard" ? "active" : "")"
+                        @onclick='() => SetView("dashboard")'>
+                    <span>🏠 Inicio</span>
+                </button>
+
+                <button class="nav-item @(ActiveView == "record" ? "active" : "")"
+                        @onclick='() => SetView("record")'>
+                    <span>🎙 Grabadora</span>
+                    @if (WebRecorderFlowStage == "recording")
+                    {
+                        <span class="badge badge-danger tabular-nums">● @SimulatedTimerDisplay</span>
+                    }
+                    else if (WebRecorderFlowStage == "paused")
+                    {
+                        <span class="badge badge-pause tabular-nums">⏸ Pausa</span>
+                    }
+                </button>
+
+                <button class="nav-item @(ActiveView == "detail" && DetailSubTab == "resumen" ? "active" : "")"
+                        @onclick='() => { SetView("detail"); DetailSubTab = "resumen"; }'>
+                    <span>📂 Reuniones</span>
+                    <span class="badge badge-neutral tabular-nums">@FilteredMeetings.Count</span>
+                </button>
+
+                <button class="nav-item @(ActiveView == "checklist" || (ActiveView == "detail" && DetailSubTab == "tareas") ? "active" : "")"
+                        @onclick='() => { SetView("detail"); DetailSubTab = "tareas"; }'>
+                    <span>☑️ Tareas</span>
+                    <span class="badge badge-teal tabular-nums">@TotalPendingTasksCount</span>
+                </button>
+
+                <button class="nav-item @(ActiveView == "mindmap" || (ActiveView == "detail" && DetailSubTab == "mapa") ? "active" : "")"
+                        @onclick='() => { SetView("detail"); DetailSubTab = "mapa"; }'>
+                    <span>🧭 Mapa mental</span>
+                </button>
+
+                <button class="nav-item @(ActiveView == "settings" && SettingsSubTab == "general" ? "active" : "")"
+                        @onclick='() => { SetView("settings"); SettingsSubTab = "general"; }'>
+                    <span>⚙️ Configuración</span>
+                </button>
+
+                <button class="nav-item @(ActiveView == "settings" && SettingsSubTab == "diagnostics" ? "active" : "")"
+                        @onclick='() => { SetView("settings"); SettingsSubTab = "diagnostics"; }'>
+                    <span>🩺 Diagnóstico</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Compañero Koda Integrado en la Barra Lateral -->
+        <div style="border-top:1px solid var(--border-subtle); padding-top:14px; margin-top:18px;">
+            <div class="card-elevated" style="padding:12px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                    <div class="koda-mascot-badge" style="width:36px; height:36px; font-size:18px;">🐾</div>
+                    <div>
+                        <div style="font-weight:700; font-size:calc(13px * var(--font-scale)); color:var(--brand-teal);">
+                            @Store.PetName · Compañero
+                        </div>
+                        <div style="font-size:calc(11px * var(--font-scale)); color:var(--text-muted);">
+                            @(WebRecorderFlowStage == "recording" ? "🔇 En silencio al grabar" : $"Tienes {TotalPendingTasksCount} pendientes activos")
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-outline btn-sm"
+                        style="width:100%;"
+                        @onclick="() => IsKodaDrawerOpen = !IsKodaDrawerOpen">
+                    @(IsKodaDrawerOpen ? "Contraer panel de Koda" : "Abrir asistente Koda")
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- =================================================================== -->
+    <!-- ÁREA CENTRAL AMPLIA DE LECTURA Y ORGANIZACIÓN -->
+    <!-- =================================================================== -->
+    <div class="web-main-column">
+        <header class="topbar" role="banner">
+            <div>
+                <h1 style="margin:0; font-size:calc(20px * var(--font-scale)); font-weight:800;">
+                    Hola, Usuario
+                </h1>
+                <div style="font-size:calc(12.5px * var(--font-scale)); color:var(--text-muted);">
+                    Organiza tus reuniones, grabaciones y acuerdos en un solo lugar
+                </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <!-- Escala de texto accesible -->
+                <div style="display:flex; align-items:center; gap:4px; background:var(--bg-surface); border:1px solid var(--border-subtle); padding:4px 8px; border-radius:10px;" aria-label="Tamaño de texto">
+                    <span style="font-size:calc(11.5px * var(--font-scale)); color:var(--text-muted); margin-right:4px;">Texto:</span>
+                    <button class="btn btn-sm @(FontScaleMode == "1" ? "btn-teal" : "btn-outline")" @onclick='() => SetFontScale("1")'>100%</button>
+                    <button class="btn btn-sm @(FontScaleMode == "1.15" ? "btn-teal" : "btn-outline")" @onclick='() => SetFontScale("1.15")'>115%</button>
+                    <button class="btn btn-sm @(FontScaleMode == "1.30" ? "btn-teal" : "btn-outline")" @onclick='() => SetFontScale("1.30")'>130%</button>
+                </div>
+
+                @if (ActiveView == "settings")
+                {
+                <!-- Selector de estados de interfaz (vacío, carga, error, sin conexión, presupuesto agotado) -->
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:calc(11.5px * var(--font-scale)); color:var(--text-muted);">Vista:</span>
+                    <select style="width:auto; padding:6px 10px; font-size:calc(12px * var(--font-scale));"
+                            @bind="SimulatedUiState">
+                        <option value="normal">Normal (Conectado)</option>
+                        <option value="offline">Sin conexión (Offline)</option>
+                        <option value="budget_exhausted">Presupuesto agotado</option>
+                        <option value="empty">Estado vacío</option>
+                        <option value="loading">Procesando resumen</option>
+                        <option value="error">Error de proveedor</option>
+                    </select>
+                </div>
+
+                }
+
+                <button class="btn btn-outline btn-sm" @onclick="() => IsKodaDrawerOpen = !IsKodaDrawerOpen">
+                    🐾 @(IsKodaDrawerOpen ? "Ocultar Koda" : "Koda")
+                </button>
+
+                @if (IsAuthenticated)
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="Logout">Salir (@LoggedUser)</button>
+                }
+            </div>
+        </header>
+
+        @if (!IsAuthenticated)
+        {
+            <main id="main-workspace" class="workspace-body">
+                <div style="max-width:440px; margin:48px auto; width:100%;" class="card">
+                    <h2 style="margin:0 0 8px 0; font-size:calc(19px * var(--font-scale));">Iniciar sesión en KodaMemo</h2>
+                    <p style="font-size:calc(13px * var(--font-scale)); color:var(--text-secondary); margin-bottom:16px;">
+                        Ingresa tus credenciales para consultar y organizar tus reuniones sincronizadas.
+                    </p>
+                    @if (!string.IsNullOrWhiteSpace(LoginError))
+                    {
+                        <div class="state-banner state-error" role="alert">@LoginError</div>
+                    }
+                    <div style="margin-bottom:12px;">
+                        <label for="login-user" style="font-size:calc(12.5px * var(--font-scale)); font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Usuario</label>
+                        <input id="login-user" autocomplete="username" type="text" @bind="LoginUsername" placeholder="owner" />
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <label for="login-password" style="font-size:calc(12.5px * var(--font-scale)); font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Contraseña</label>
+                        <input id="login-password" autocomplete="current-password" type="password" @bind="LoginPassword" placeholder="••••••••" />
+                    </div>
+                    <button class="btn btn-coral" style="width:100%;" @onclick="PerformLogin">Entrar</button>
+                </div>
+            </main>
+        }
+        else
+        {
+            <main id="main-workspace" class="workspace-body">
+                <div class="workspace-center">
+                    <!-- =============================================================== -->
+                    <!-- AVISOS DE ATENCIÓN (ÚNICAMENTE CUANDO REQUIEREN ACCIÓN) -->
+                    <!-- =============================================================== -->
+                    @if (SimulatedUiState == "offline")
+                    {
+                        <div class="state-banner state-offline" role="status">
+                            <div>
+                                <strong>Modo sin conexión activo:</strong> Puedes reproducir grabaciones locales y editar transcripciones, tareas y mapas mentales. La sincronización se reanudará al recuperar la red.
+                            </div>
+                            <button class="btn btn-outline btn-sm" @onclick='() => SimulatedUiState = "normal"'>Reconectar</button>
+                        </div>
+                    }
+                    @if (SimulatedUiState == "budget_exhausted")
+                    {
+                        <div class="state-banner state-budget-exhausted" role="alert">
+                            <div>
+                                <strong>Límite mensual de IA externa alcanzado (US$5.00 / US$5.00):</strong> Las consultas pagadas están pausadas. La grabación y transcripción local siguen disponibles sin costo.
+                            </div>
+                            <button class="btn btn-outline btn-sm" @onclick='() => { SetView("settings"); SettingsSubTab = "general"; }'>Revisar presupuesto</button>
+                        </div>
+                    }
+                    @if (SimulatedUiState == "error")
+                    {
+                        <div class="state-banner state-error" role="alert">
+                            <div>
+                                <strong>No se pudo completar el resumen externo:</strong> Tu grabación y la transcripción local están guardadas de forma segura. Puedes reintentar solo el resumen.
+                            </div>
+                            <button class="btn btn-coral btn-sm" @onclick='() => SimulatedUiState = "normal"'>Reintentar resumen</button>
+                        </div>
+                    }
+
+                    <!-- BARRA COMPACTA DE GRABACIÓN ACTIVA SI NAVEGAS A OTRA SECCIÓN -->
+                    @if ((WebRecorderFlowStage == "recording" || WebRecorderFlowStage == "paused") && ActiveView != "dashboard" && ActiveView != "record")
+                    {
+                        <div class="compact-rec-bar" role="region" aria-label="Grabación activa en curso">
+                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                                <span class="badge @(WebRecorderFlowStage == "recording" ? "badge-danger" : "badge-pause")">
+                                    @(WebRecorderFlowStage == "recording" ? "● Grabando" : "⏸ Grabación en pausa")
+                                </span>
+                                <strong class="tabular-nums" style="font-size:calc(16px * var(--font-scale));">@SimulatedTimerDisplay</strong>
+                                <span style="color:rgba(255,255,255,0.85); font-size:calc(13px * var(--font-scale));">
+                                    @(string.IsNullOrWhiteSpace(NewWebSessionTitle) ? "Revisión de arquitectura y sincronización móvil" : NewWebSessionTitle)
+                                </span>
+                            </div>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                @if (WebRecorderFlowStage == "recording")
+                                {
+                                    <button class="btn btn-amber btn-sm" @onclick="PauseWebRecorder">⏸ Pausar</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-emerald btn-sm" @onclick="ResumeWebRecorder">▶ Continuar</button>
+                                }
+                                <button class="btn btn-coral btn-sm" @onclick="StopAndSaveWebRecorder">⏹ Detener y guardar</button>
+                                <button class="btn btn-hero-secondary btn-sm" @onclick='() => SetView("record")'>Volver a la grabadora ➔</button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (SimulatedUiState == "loading")
+                    {
+                        <div class="card" style="text-align:center; padding:42px 24px;">
+                            <div class="badge badge-teal" style="margin-bottom:10px;">Paso 5 de 6 · Procesando resumen</div>
+                            <h2 style="margin:0 0 8px 0; font-size:calc(20px * var(--font-scale));">Organizando los acuerdos y tareas de tu reunión...</h2>
+                            <p style="color:var(--text-secondary); margin:0 auto 18px auto; max-width:520px;">
+                                La grabación y su transcripción local ya están guardadas. Estamos estructurando los puntos clave y verificando las citas.
+                            </p>
+                            <button class="btn btn-outline btn-sm" @onclick='() => SimulatedUiState = "normal"'>Ver reunión ahora</button>
+                        </div>
+                    }
+                    else if (SimulatedUiState == "empty")
+                    {
+                        <div class="card" style="text-align:center; padding:48px 24px; max-width:640px; margin:20px auto;">
+                            <h2 style="margin:0 0 8px 0; font-size:calc(21px * var(--font-scale));">Aún no tienes reuniones en esta vista</h2>
+                            <p style="color:var(--text-secondary); margin-bottom:22px;">
+                                Inicia una nueva grabación o sincroniza las sesiones capturadas desde tu teléfono Android.
+                            </p>
+                            <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                                <button class="btn btn-coral btn-lg" @onclick='() => { SimulatedUiState = "normal"; StartOrOpenWebRecorder(); }'>
+                                    🎙 Grabar reunión
+                                </button>
+                                <button class="btn btn-outline btn-lg" @onclick='() => SimulatedUiState = "normal"'>
+                                    Ver reuniones guardadas (@FilteredMeetings.Count)
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- =============================================================== -->
+                        <!-- VISTA 1 Y 2: INICIO CON GRABADORA PROTAGONISTA / VISTA GRABADORA -->
+                        <!-- =============================================================== -->
+                        @if (ActiveView == "dashboard" || ActiveView == "record")
+                        {
+                            <section class="recorder-hero" aria-label="Vista previa de la grabadora">
+                                <p class="recorder-preview-notice" role="note"><strong>Vista previa del diseño</strong> · Esta grabadora web todavía no captura audio. Para grabar, utiliza la app Android.</p>
+                                <!-- Barra de flujo completo: Reposo -> Grabando -> Pausado -> Guardado -> Procesando -> Resumen listo -->
+                                <details class="recorder-demo-controls"><summary>Explorar estados de la propuesta</summary><div class="flow-stepper" role="group" aria-label="Estados demostrativos">
+                                    <button class="flow-step @(WebRecorderFlowStage == "idle" ? "active-ready" : "")"
+                                            @onclick='() => SetWebFlowStage("idle")'>
+                                        1. Reposo
+                                    </button>
+                                    <span style="color:rgba(255,255,255,0.35);">→</span>
+                                    <button class="flow-step @(WebRecorderFlowStage == "recording" ? "active-rec" : "")"
+                                            @onclick="StartWebRecorder">
+                                        2. Grabando
+                                    </button>
+                                    <span style="color:rgba(255,255,255,0.35);">→</span>
+                                    <button class="flow-step @(WebRecorderFlowStage == "paused" ? "active-pause" : "")"
+                                            @onclick="PauseWebRecorder">
+                                        3. En pausa
+                                    </button>
+                                    <span style="color:rgba(255,255,255,0.35);">→</span>
+                                    <button class="flow-step @(WebRecorderFlowStage == "saved" ? "active-ready" : "")"
+                                            @onclick="StopAndSaveWebRecorder">
+                                        4. Guardado
+                                    </button>
+                                    <span style="color:rgba(255,255,255,0.35);">→</span>
+                                    <button class="flow-step @(WebRecorderFlowStage == "processing" ? "active-pause" : "")"
+                                            @onclick='() => SetWebFlowStage("processing")'>
+                                        5. Procesando
+                                    </button>
+                                    <span style="color:rgba(255,255,255,0.35);">→</span>
+                                    <button class="flow-step @(WebRecorderFlowStage == "ready" ? "active-ready" : "")"
+                                            @onclick='() => SetWebFlowStage("ready")'>
+                                        6. Resumen listo
+                                    </button>
+                                </div></details>
+
+                                <div class="recorder-layout">
+                                    <div class="recorder-content">
+                                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+                                            @if (WebRecorderFlowStage == "recording")
+                                            {
+                                                <span class="badge" style="background:var(--accent-coral); color:#FFFFFF; font-size:calc(12.5px * var(--font-scale)); padding:6px 14px;">
+                                                    ● GRABANDO EN VIVO
+                                                </span>
+                                            }
+                                            else if (WebRecorderFlowStage == "paused")
+                                            {
+                                                <span class="badge" style="background:var(--status-pause); color:#451A03; font-size:calc(12.5px * var(--font-scale)); padding:6px 14px;">
+                                                    ⏸ Grabación en pausa
+                                                </span>
+                                            }
+                                            else if (WebRecorderFlowStage == "saved" || WebRecorderFlowStage == "ready")
+                                            {
+                                                <span class="badge" style="background:var(--status-ready); color:#FFFFFF; font-size:calc(12.5px * var(--font-scale)); padding:6px 14px;">
+                                                    ✓ @(WebRecorderFlowStage == "ready" ? "Resumen listo para consultar" : "Grabación guardada correctamente")
+                                                </span>
+                                            }
+                                            else if (WebRecorderFlowStage == "processing")
+                                            {
+                                                <span class="badge" style="background:#38BDF8; color:#0F172A; font-size:calc(12.5px * var(--font-scale)); padding:6px 14px;">
+                                                    ⏳ Procesando acuerdos y tareas (85%)
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge" style="background:rgba(255,255,255,0.16); color:#FFFFFF; font-size:calc(12.5px * var(--font-scale)); padding:6px 14px;">
+                                                    🎙 Listo para grabar
+                                                </span>
+                                            }
+
+                                            <span style="font-size:calc(12px * var(--font-scale)); color:rgba(255,255,255,0.8);">
+                                                @WebRecorderStatus
+                                            </span>
+                                        </div>
+
+                                        <input type="text"
+                                               @bind="NewWebSessionTitle"
+                                               aria-label="Título de la reunión" placeholder="Ponle un nombre a esta conversación…"
+                                               style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.28); color:#FFFFFF; font-size:calc(15px * var(--font-scale)); font-weight:600; margin-bottom:12px;" />
+
+                                        <!-- Onda de audio reactiva y marcas de tiempo -->
+                                        <div class="waveform-box" aria-hidden="true">
+                                            @foreach (var h in GetWaveformHeights())
+                                            {
+                                                <div class="wave-bar @(WebRecorderFlowStage == "paused" ? "paused" : (h > 42 ? "coral" : ""))"
+                                                     style="height:@(h)px;"></div>
+                                            }
+                                        </div>
+
+                                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+
+                                                @foreach (var mark in CustomRecorderMarks)
+                                                {
+                                                    <span class="badge" style="background:rgba(242,95,76,0.32); color:#FFFFFF;">📌 @mark</span>
+                                                }
+                                            </div>
+                                            <button class="btn btn-hero-secondary btn-sm" @onclick="AddRecorderMark">
+                                                + Añadir marca en @SimulatedTimerDisplay
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Temporizador grande y controles principales inequívocos -->
+                                    <div class="recorder-control-column">
+                                        <div style="text-align:right; margin-bottom:14px;">
+                                            <div style="font-size:calc(12px * var(--font-scale)); text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.75);">
+                                                Duración de la reunión
+                                            </div>
+                                            <div class="heading-font tabular-nums" style="font-size:calc(52px * var(--font-scale)); font-weight:800; line-height:1.05; color:#FFFFFF;">
+                                                @SimulatedTimerDisplay
+                                            </div>
+                                        </div>
+
+                                        <!-- Controles grandes con icono y texto según el estado -->
+                                        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; width:100%;">
+                                            @if (WebRecorderFlowStage == "idle")
+                                            {
+                                                <button class="btn btn-coral btn-lg" @onclick="StartWebRecorder">
+                                                    🎙 Grabar reunión
+                                                </button>
+                                                <button class="btn btn-hero-secondary btn-lg" @onclick="RefreshMeetingsFromStore">
+                                                    📂 Sincronizar audio
+                                                </button>
+                                            }
+                                            else if (WebRecorderFlowStage == "recording")
+                                            {
+                                                <button class="btn btn-hero-secondary btn-lg" @onclick="PauseWebRecorder">
+                                                    ⏸ Pausar
+                                                </button>
+                                                <button class="btn btn-coral btn-lg" @onclick="StopAndSaveWebRecorder">
+                                                    ⏹ Detener y guardar
+                                                </button>
+                                            }
+                                            else if (WebRecorderFlowStage == "paused")
+                                            {
+                                                <button class="btn btn-emerald btn-lg" @onclick="ResumeWebRecorder">
+                                                    ▶ Continuar
+                                                </button>
+                                                <button class="btn btn-coral btn-lg" @onclick="StopAndSaveWebRecorder">
+                                                    ⏹ Detener y guardar
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-emerald btn-lg" @onclick='() => { SetView("detail"); DetailSubTab = "resumen"; }'>
+                                                    📄 Ver resumen listo
+                                                </button>
+                                                <button class="btn btn-coral btn-lg" @onclick="StartWebRecorder">
+                                                    🎙 Nueva grabación
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            @if (ActiveView == "dashboard")
+                            {
+                                <!-- INICIO SIMPLIFICADO: REUNIONES RECIENTES Y PENDIENTES COMO PROTAGONISTAS -->
+                                <div class="workspace-split">
+                                    <!-- Columna Izquierda: Reuniones Recientes -->
+                                    <div class="card">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+                                            <h2 style="margin:0; font-size:calc(18px * var(--font-scale));">
+                                                Reuniones recientes (@FilteredMeetings.Count)
+                                            </h2>
+                                            <button class="btn btn-outline btn-sm" @onclick="RefreshMeetingsFromStore">
+                                                Actualizar lista
+                                            </button>
+                                        </div>
+
+                                        <input type="text"
+                                               aria-label="Buscar reuniones" placeholder="Buscar reunión, acuerdo o participante..."
+                                               @bind="SearchQuery"
+                                               @bind:event="oninput"
+                                               style="margin-bottom:16px;" />
+
+                                        @foreach (var m in FilteredMeetings)
+                                        {
+                                            <div class="meeting-card @(SelectedMeeting?.SessionUid == m.SessionUid ? "selected" : "")"
+                                                 @onclick="() => SelectMeeting(m)">
+                                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                                                    <div>
+                                                        <div class="heading-font" style="font-size:calc(16px * var(--font-scale)); font-weight:700; color:var(--text-primary);">
+                                                            @GetCleanMeetingTitle(m)
+                                                        </div>
+                                                        <div class="tabular-nums" style="font-size:calc(13px * var(--font-scale)); color:var(--text-muted); margin-top:3px;">
+                                                            @m.FormattedDateLocal · @m.FormattedDuration
+                                                        </div>
+                                                    </div>
+                                                    <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+                                                        <span class="badge badge-ready">● Resumen listo</span>
+                                                        @if (m.IsFromRealPhone)
+                                                        {
+                                                            <span class="badge badge-teal" title="Sincronizada desde el teléfono Android">📱 Teléfono</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-pause" title="Sesión demostrativa de ejemplo">Demostrativa</span>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
+                                                    <span style="font-size:calc(12.5px * var(--font-scale)); color:var(--text-secondary);">
+                                                        @m.Agreements.Count acuerdos · @m.Tasks.Count(t => !t.IsCompleted) pendientes
+                                                    </span>
+                                                    <div style="display:flex; gap:8px;">
+                                                        <button class="btn btn-outline btn-sm"
+                                                                @onclick:stopPropagation="true"
+                                                                @onclick='() => { SelectMeeting(m); SetView("detail"); DetailSubTab = "resumen"; }'>
+                                                            ▶ Reproducir
+                                                        </button>
+                                                        <button class="btn btn-teal btn-sm"
+                                                                @onclick:stopPropagation="true"
+                                                                @onclick='() => { SelectMeeting(m); SetView("detail"); DetailSubTab = "resumen"; }'>
+                                                            📄 Ver resumen
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Columna Derecha: Pendientes Activos y Reproductor Rápido -->
+                                    <div>
+                                        @if (SelectedMeeting is not null)
+                                        {
+                                            <div class="card">
+                                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
+                                                    <div>
+                                                        <span style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted); font-weight:600;">
+                                                            Escucha rápida
+                                                        </span>
+                                                        <h3 style="margin:2px 0 0 0; font-size:calc(16px * var(--font-scale));">
+                                                            @GetCleanMeetingTitle(SelectedMeeting)
+                                                        </h3>
+                                                    </div>
+                                                    <button class="btn btn-outline btn-sm" @onclick='() => { SetView("detail"); DetailSubTab = "resumen"; }'>
+                                                        Abrir detalle ➔
+                                                    </button>
+                                                </div>
+
+                                                <div class="card-elevated" style="margin-bottom:18px;">
+                                                    <audio controls preload="metadata" style="width:100%; height:40px;" src="/api/audio/@SelectedMeeting.LocalWavFileName"></audio>
+                                                </div>
+
+                                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                                    <h3 style="margin:0; font-size:calc(16px * var(--font-scale));">
+                                                        Pendientes (@SelectedMeeting.Tasks.Count(t => !t.IsCompleted) activos)
+                                                    </h3>
+                                                    <button class="btn btn-outline btn-sm" @onclick='() => { SetView("detail"); DetailSubTab = "tareas"; }'>
+                                                        Editar todos
+                                                    </button>
+                                                </div>
+
+                                                @foreach (var task in SelectedMeeting.Tasks)
+                                                {
+                                                    <div class="card-elevated" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                                                        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; flex:1;">
+                                                            <input type="checkbox"
+                                                                   checked="@task.IsCompleted"
+                                                                   @onchange="(e) => OnTaskCompletedChanged(task, (bool)(e.Value ?? false))"
+                                                                   style="width:18px; height:18px; accent-color:var(--brand-teal);" />
+                                                            <span style="text-decoration:@(task.IsCompleted ? "line-through" : "none"); color:@(task.IsCompleted ? "var(--text-muted)" : "var(--text-primary)");">
+                                                                @task.Description
+                                                            </span>
+                                                        </label>
+                                                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                                                            <span class="badge badge-neutral">👤 @task.Assignee</span>
+                                                            <span class="badge badge-teal">📅 @task.DueDateText</span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <!-- =============================================================== -->
+                        <!-- VISTA 3, 4 Y 5: DETALLE DE REUNIÓN (RESUMEN, TRANSCRIPCIÓN, TAREAS Y MAPA) -->
+                        <!-- =============================================================== -->
+                        @if (ActiveView == "detail" || ActiveView == "checklist" || ActiveView == "mindmap")
+                        {
+                            <div class="detail-split">
+                                <!-- Lista lateral limpia de reuniones -->
+                                <div class="card">
+                                    <h3 style="margin:0 0 12px 0; font-size:calc(16px * var(--font-scale));">Reuniones (@FilteredMeetings.Count)</h3>
+                                    @foreach (var m in FilteredMeetings)
+                                    {
+                                        <div class="meeting-card @(SelectedMeeting?.SessionUid == m.SessionUid ? "selected" : "")"
+                                             style="padding:13px;"
+                                             @onclick="() => SelectMeeting(m)">
+                                            <div style="font-weight:700; font-size:calc(14px * var(--font-scale)); color:var(--text-primary);">
+                                                @GetCleanMeetingTitle(m)
+                                            </div>
+                                            <div class="tabular-nums" style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted); margin-top:4px;">
+                                                @m.FormattedDateLocal · @m.FormattedDuration
+                                            </div>
+                                            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+                                                <span class="badge badge-ready">Resumen listo</span>
+                                                @if (m.IsFromRealPhone)
+                                                {
+                                                    <span class="badge badge-teal">📱 Teléfono</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Panel Principal del Detalle -->
+                                <div>
+                                    @if (SelectedMeeting is not null)
+                                    {
+                                        <div class="card">
+                                            <!-- Encabezado limpio de la reunión -->
+                                            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+                                                <div>
+                                                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                                        <h2 style="margin:0; font-size:calc(22px * var(--font-scale));">
+                                                            @GetCleanMeetingTitle(SelectedMeeting)
+                                                        </h2>
+                                                        <span class="badge badge-ready">● Resumen listo</span>
+                                                        @if (SelectedMeeting.IsFromRealPhone)
+                                                        {
+                                                            <span class="badge badge-teal">📱 Grabación real del teléfono</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge badge-pause">Sesión demostrativa</span>
+                                                        }
+                                                    </div>
+                                                    <div class="tabular-nums" style="font-size:calc(13px * var(--font-scale)); color:var(--text-muted); margin-top:4px;">
+                                                        @SelectedMeeting.FormattedDateLocal · Duración: @SelectedMeeting.FormattedDuration · Versión de transcripción v@(SelectedMeeting.ActiveTranscriptVersion)
+                                                    </div>
+                                                </div>
+
+                                                @if (SelectedMeeting.IsSummaryStale)
+                                                {
+                                                    <div class="state-banner state-offline" style="margin:0; padding:8px 14px;">
+                                                        <span>La transcripción fue editada (v@(SelectedMeeting.ActiveTranscriptVersion)).</span>
+                                                        <button class="btn btn-amber btn-sm" @onclick="RevalidateCurrentMeeting">
+                                                            Actualizar citas
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <!-- Reproductor Compacto Integrado -->
+                                            <div class="card-elevated" style="margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+                                                <div style="min-width:180px;">
+                                                    <div style="font-weight:700; font-size:calc(13.5px * var(--font-scale)); color:var(--brand-teal);">
+                                                        🔊 Audio de la reunión
+                                                    </div>
+                                                    <div class="tabular-nums" style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted);">
+                                                        Duración total: @SelectedMeeting.FormattedDuration
+                                                    </div>
+                                                </div>
+                                                <div style="flex:1; min-width:260px;">
+                                                    <audio controls preload="metadata" style="width:100%; height:40px;" src="/api/audio/@SelectedMeeting.LocalWavFileName"></audio>
+                                                </div>
+                                            </div>
+
+                                            <!-- Cuatro Pestañas Claras: Resumen, Transcripción, Tareas y Mapa -->
+                                            <div class="tabs" role="tablist">
+                                                <button class="tab-btn @(GetActiveDetailTab() == "resumen" ? "active" : "")"
+                                                        @onclick='() => { ActiveView = "detail"; DetailSubTab = "resumen"; }'>
+                                                    Resumen
+                                                </button>
+                                                <button class="tab-btn @(GetActiveDetailTab() == "transcripcion" ? "active" : "")"
+                                                        @onclick='() => { ActiveView = "detail"; DetailSubTab = "transcripcion"; }'>
+                                                    Transcripción (@SelectedMeeting.Segments.Count)
+                                                </button>
+                                                <button class="tab-btn @(GetActiveDetailTab() == "tareas" ? "active" : "")"
+                                                        @onclick='() => { ActiveView = "detail"; DetailSubTab = "tareas"; }'>
+                                                    Tareas (@SelectedMeeting.Tasks.Count)
+                                                </button>
+                                                <button class="tab-btn @(GetActiveDetailTab() == "mapa" ? "active" : "")"
+                                                        @onclick='() => { ActiveView = "detail"; DetailSubTab = "mapa"; }'>
+                                                    Mapa
+                                                </button>
+                                            </div>
+
+                                            <!-- PESTAÑA 1: RESUMEN Y ACUERDOS CON EVIDENCIA DISCRETA Y DESPLEGABLE -->
+                                            @if (GetActiveDetailTab() == "resumen")
+                                            {
+                                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+                                                    <div>
+                                                        <h3 style="font-size:calc(16px * var(--font-scale)); margin:0 0 12px 0;">
+                                                            Temas principales (@SelectedMeeting.MainTopics.Count)
+                                                        </h3>
+                                                        @foreach (var topic in SelectedMeeting.MainTopics)
+                                                        {
+                                                            <div class="card-elevated" style="margin-bottom:12px;">
+                                                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+                                                                    <strong style="font-size:calc(14.5px * var(--font-scale));">@topic.Title</strong>
+                                                                    <span class="badge @(topic.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "badge-ready" : "badge-neutral")">
+                                                                        @(topic.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "✓ Confirmado" : "Por revisar")
+                                                                    </span>
+                                                                </div>
+                                                                <p style="margin:8px 0; font-size:calc(13.5px * var(--font-scale)); color:var(--text-secondary);">
+                                                                    @topic.SummaryNotes
+                                                                </p>
+
+                                                                <!-- Referencia de evidencia discreta y desplegable -->
+                                                                <details class="citation-disclosure">
+                                                                    <summary>Ver cita en transcripción · @topic.TimestampReference</summary>
+                                                                    <div style="margin-top:6px; color:var(--text-secondary);">
+                                                                        <em>"@topic.EvidenceQuote"</em>
+                                                                        <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                                                                            <span class="badge @GetCitationBadgeClass(topic.CitationStatus)">@GetCitationBadgeText(topic.CitationStatus)</span>
+                                                                            <button class="btn btn-outline btn-sm" @onclick="() => ToggleTopicConfirmation(topic)">
+                                                                                @(topic.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "Marcar por revisar" : "✓ Confirmar tema")
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </details>
+                                                            </div>
+                                                        }
+                                                    </div>
+
+                                                    <div>
+                                                        <h3 style="font-size:calc(16px * var(--font-scale)); margin:0 0 12px 0;">
+                                                            Acuerdos (@SelectedMeeting.Agreements.Count)
+                                                        </h3>
+                                                        @foreach (var agr in SelectedMeeting.Agreements)
+                                                        {
+                                                            <div class="card-elevated" style="margin-bottom:12px;">
+                                                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+                                                                    <strong style="font-size:calc(14.5px * var(--font-scale));">@agr.Description</strong>
+                                                                    <span class="badge @(agr.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "badge-ready" : "badge-neutral")">
+                                                                        @(agr.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "✓ Confirmado" : "Por revisar")
+                                                                    </span>
+                                                                </div>
+
+                                                                <!-- Referencia de evidencia discreta y desplegable -->
+                                                                <details class="citation-disclosure">
+                                                                    <summary>Ver cita en transcripción · @agr.TimestampReference</summary>
+                                                                    <div style="margin-top:6px; color:var(--text-secondary);">
+                                                                        <em>"@agr.EvidenceQuote"</em>
+                                                                        <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                                                                            <span class="badge @GetCitationBadgeClass(agr.CitationStatus)">@GetCitationBadgeText(agr.CitationStatus)</span>
+                                                                            <button class="btn btn-outline btn-sm" @onclick="() => ToggleAgreementConfirmation(agr)">
+                                                                                @(agr.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "Desmarcar" : "✓ Confirmar acuerdo")
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </details>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            <!-- PESTAÑA 2: TRANSCRIPCIÓN EDITABLE -->
+                                            @if (GetActiveDetailTab() == "transcripcion")
+                                            {
+                                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                                                    <div>
+                                                        <h3 style="font-size:calc(16px * var(--font-scale)); margin:0;">
+                                                            Transcripción de la reunión (v@(SelectedMeeting.ActiveTranscriptVersion))
+                                                        </h3>
+                                                        <p style="font-size:calc(12.5px * var(--font-scale)); color:var(--text-muted); margin:2px 0 0 0;">
+                                                            Edita cualquier fragmento para corregir nombres o acuerdos; cada cambio guarda una nueva versión automáticamente.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div style="max-height:460px; overflow-y:auto; padding-right:6px;">
+                                                    @foreach (var seg in SelectedMeeting.Segments)
+                                                    {
+                                                        <div style="display:grid; grid-template-columns:120px 1fr; gap:10px; align-items:center; margin-bottom:10px;">
+                                                            <span class="badge badge-teal tabular-nums" style="justify-content:center;">
+                                                                @seg.StartTimestamp – @seg.EndTimestamp
+                                                            </span>
+                                                            <input type="text"
+                                                                   value="@seg.Text"
+                                                                   @onchange="(e) => OnSegmentEdited(seg.SegmentNumber, e.Value?.ToString() ?? string.Empty)" />
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+
+                                            <!-- PESTAÑA 3: TAREAS / CHECKLIST EDITABLE -->
+                                            @if (GetActiveDetailTab() == "tareas")
+                                            {
+                                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                                                    <h3 style="margin:0; font-size:calc(16px * var(--font-scale));">
+                                                        Tareas y compromisos de la reunión
+                                                    </h3>
+                                                    <div style="display:flex; gap:6px;">
+                                                        <button class="btn btn-sm @(ChecklistFilter == "all" ? "btn-teal" : "btn-outline")" @onclick='() => ChecklistFilter = "all"'>Todas (@SelectedMeeting.Tasks.Count)</button>
+                                                        <button class="btn btn-sm @(ChecklistFilter == "pending" ? "btn-teal" : "btn-outline")" @onclick='() => ChecklistFilter = "pending"'>Pendientes (@SelectedMeeting.Tasks.Count(t => !t.IsCompleted))</button>
+                                                        <button class="btn btn-sm @(ChecklistFilter == "done" ? "btn-teal" : "btn-outline")" @onclick='() => ChecklistFilter = "done"'>Completadas (@SelectedMeeting.Tasks.Count(t => t.IsCompleted))</button>
+                                                    </div>
+                                                </div>
+
+                                                @foreach (var task in GetFilteredTasks(SelectedMeeting))
+                                                {
+                                                    <div class="card-elevated" style="margin-bottom:12px;">
+                                                        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                                                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:calc(14.5px * var(--font-scale)); font-weight:700;">
+                                                                <input type="checkbox"
+                                                                       checked="@task.IsCompleted"
+                                                                       @onchange="(e) => OnTaskCompletedChanged(task, (bool)(e.Value ?? false))"
+                                                                       style="width:19px; height:19px; accent-color:var(--brand-teal);" />
+                                                                <span style="text-decoration:@(task.IsCompleted ? "line-through" : "none"); color:@(task.IsCompleted ? "var(--text-muted)" : "var(--text-primary)");">
+                                                                    @task.Description
+                                                                </span>
+                                                            </label>
+
+                                                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                                                <span class="badge @(task.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "badge-ready" : "badge-neutral")">
+                                                                    @(task.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "✓ Confirmada" : "Por confirmar")
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:10px; margin-top:10px; align-items:end;">
+                                                            <div>
+                                                                <label style="font-size:calc(11.5px * var(--font-scale)); color:var(--text-secondary); font-weight:600;">
+                                                                    👤 Responsable:
+                                                                </label>
+                                                                <input type="text"
+                                                                       value="@task.Assignee"
+                                                                       @onchange="(e) => OnTaskAssigneeChanged(task, e.Value?.ToString() ?? string.Empty)" />
+                                                            </div>
+                                                            <div>
+                                                                <label style="font-size:calc(11.5px * var(--font-scale)); color:var(--text-secondary); font-weight:600;">
+                                                                    📅 Fecha límite:
+                                                                </label>
+                                                                <input type="text"
+                                                                       value="@task.DueDateText"
+                                                                       @onchange="(e) => OnTaskDueDateChanged(task, e.Value?.ToString() ?? string.Empty)" />
+                                                            </div>
+                                                            <div>
+                                                                <button class="btn btn-outline btn-sm" @onclick="() => ToggleTaskConfirmation(task)">
+                                                                    @(task.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser ? "Reabrir" : "✓ Confirmar")
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <details class="citation-disclosure">
+                                                            <summary>Ver cita de respaldo · @task.TimestampReference</summary>
+                                                            <div style="margin-top:4px; color:var(--text-secondary);">
+                                                                <em>"@task.EvidenceQuote"</em>
+                                                            </div>
+                                                        </details>
+                                                    </div>
+                                                }
+
+                                                <div class="card-elevated" style="border-style:dashed; margin-top:14px;">
+                                                    <strong style="font-size:calc(13.5px * var(--font-scale));">+ Añadir nueva tarea</strong>
+                                                    <div style="display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; margin-top:8px;">
+                                                        <input type="text" placeholder="Descripción de la tarea..." @bind="NewTaskDescription" />
+                                                        <input type="text" placeholder="Responsable" @bind="NewTaskAssignee" />
+                                                        <input type="text" placeholder="Fecha compromiso" @bind="NewTaskDueDate" />
+                                                        <button class="btn btn-coral btn-sm" @onclick="AddManualTask">Guardar tarea</button>
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            <!-- PESTAÑA 4: MAPA MENTAL LEGIBLE Y EXPLORABLE -->
+                                            @if (GetActiveDetailTab() == "mapa")
+                                            {
+                                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+                                                    <div>
+                                                        <h3 style="margin:0; font-size:calc(16px * var(--font-scale));">Mapa mental de la reunión</h3>
+                                                        <div style="font-size:calc(12.5px * var(--font-scale)); color:var(--text-muted);">
+                                                            Explora, contrae o edita cada rama de temas, acuerdos y tareas.
+                                                        </div>
+                                                    </div>
+                                                    <div style="display:flex; gap:8px;">
+                                                        <button class="btn btn-outline btn-sm" @onclick="() => CollapsedNodeIds.Clear()">Expandir todo</button>
+                                                        <button class="btn btn-outline btn-sm" @onclick="RegenerateMindMapFree">Reconstruir mapa</button>
+                                                    </div>
+                                                </div>
+
+                                                @if (SelectedMeeting.MindMapRoot is not null)
+                                                {
+                                                    <div class="mindmap-tree">
+                                                        @RenderMindMapNode(SelectedMeeting.MindMapRoot, null)
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- =============================================================== -->
+                        <!-- VISTA 7: CONFIGURACIÓN (PROVEEDORES/PRESUPUESTO + DIAGNÓSTICO TÉCNICO) -->
+                        <!-- =============================================================== -->
+                        @if (ActiveView == "settings")
+                        {
+                            <div class="tabs">
+                                <button class="tab-btn @(SettingsSubTab == "general" ? "active" : "")"
+                                        @onclick='() => SettingsSubTab = "general"'>
+                                    Proveedores, Privacidad y Presupuesto
+                                </button>
+                                <button class="tab-btn @(SettingsSubTab == "diagnostics" ? "active" : "")"
+                                        @onclick='() => SettingsSubTab = "diagnostics"'>
+                                    Diagnóstico Técnico (SQLite, Hashes, Audio y Métricas)
+                                </button>
+                            </div>
+
+                            @if (SettingsSubTab == "general")
+                            {
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                                    <div class="card">
+                                        <h2 style="margin:0 0 10px 0; font-size:calc(18px * var(--font-scale));">Proveedores de transcripción y resumen</h2>
+                                        <p style="font-size:calc(13px * var(--font-scale)); color:var(--text-secondary); margin-bottom:16px;">
+                                            La aplicación procesa la voz localmente sin costo y nunca cambia a modelos externos de pago sin tu confirmación.
+                                        </p>
+
+                                        <div class="card-elevated" style="margin-bottom:12px;">
+                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                                <strong>Motor de transcripción (Voz a texto)</strong>
+                                                <span class="badge badge-ready">Activo · Local (US$0.00)</span>
+                                            </div>
+                                            <select style="margin-bottom:6px;">
+                                                <option value="whisper-local">Transcripción local en el dispositivo (Sin internet · US$0.00)</option>
+                                                <option value="pc-local">Servicio en red local (US$0.00)</option>
+                                                <option value="api-stt">Servicio externo (Solo con autorización explícita)</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="card-elevated" style="margin-bottom:12px;">
+                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                                <strong>Proveedor de resumen y acuerdos</strong>
+                                                <span class="badge badge-teal">Configurable</span>
+                                            </div>
+                                            <select>
+                                                <option value="gemini-2.0-flash-lite">Google Gemini 2.0 Flash-Lite (Económico)</option>
+                                                <option value="gemini-2.5-flash-lite">Google Gemini 2.5 Flash-Lite</option>
+                                                <option value="claude-3-5-haiku">Anthropic Claude 3.5 Haiku</option>
+                                                <option value="manual-export">Exportación manual de texto + prompt (US$0.00)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="card">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                            <h2 style="margin:0; font-size:calc(18px * var(--font-scale));">Presupuesto mensual</h2>
+                                            <span class="badge @(SimulatedUiState == "budget_exhausted" ? "badge-danger" : "badge-ready")">
+                                                @(SimulatedUiState == "budget_exhausted" ? "Límite alcanzado" : "Dentro del límite")
+                                            </span>
+                                        </div>
+
+                                        <div class="card-elevated" style="margin-bottom:16px;">
+                                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                                <span>Consumo estimado del mes:</span>
+                                                <strong class="tabular-nums" style="font-size:calc(18px * var(--font-scale)); color:var(--brand-teal);">
+                                                    US$@(SimulatedUiState == "budget_exhausted" ? "5.00" : Store.TotalReconciledUsd.ToString("F4")) / US$@Store.MonthlyBudgetLimitUsd.ToString("F2")
+                                                </strong>
+                                            </div>
+                                            <div style="width:100%; height:10px; background:var(--bg-subtle); border-radius:999px; overflow:hidden; margin-bottom:8px;">
+                                                <div style="width:@(SimulatedUiState == "budget_exhausted" ? "100%" : "4%"); height:100%; background:@(SimulatedUiState == "budget_exhausted" ? "var(--status-danger)" : "var(--status-ready)");"></div>
+                                            </div>
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted);">
+                                                Se mostrará un aviso únicamente cuando el consumo se acerque o alcance el límite mensual configurado.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- SECCIÓN DE DIAGNÓSTICO TÉCNICO (SQLite, Hashes, PCM, WakeLock, Métricas y Modelos) -->
+                                <div class="card">
+                                    <h2 style="margin:0 0 8px 0; font-size:calc(18px * var(--font-scale));">
+                                        🩺 Diagnóstico Técnico del Sistema
+                                    </h2>
+                                    <p style="font-size:calc(13px * var(--font-scale)); color:var(--text-secondary); margin-bottom:16px;">
+                                        Información técnica de almacenamiento SQLite, formatos de captura, versiones SHA-256, métricas de hardware y catálogo de tarifas.
+                                    </p>
+
+                                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:18px;">
+                                        <div class="card-elevated">
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted);">Base de Datos y Sincronización</div>
+                                            <div style="font-weight:700; margin-top:4px;">SQLite `audio_ia_web_server.db3`</div>
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-secondary); margin-top:4px;">
+                                                Sincronización bidireccional `/api/sync/push` y `/api/sync/pull` con resolución de conflictos por versiones.
+                                            </div>
+                                        </div>
+                                        <div class="card-elevated">
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted);">Captura y Motor Local Android</div>
+                                            <div style="font-weight:700; margin-top:4px;">PCM 16 kHz · 16-bit · Mono · WakeLock</div>
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-secondary); margin-top:4px;">
+                                                Prueba larga validada: 47m 06.3s (86.25 MB WAV), 0 errores HAL, `Whisper.net` `ggml-base.bin` (`RTF = 0.112x`, `PSS = 702.5 MiB`).
+                                            </div>
+                                        </div>
+                                        <div class="card-elevated">
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted);">Estado de Funciones</div>
+                                            <div style="font-weight:700; margin-top:4px;">Real vs. Demostrativo</div>
+                                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-secondary); margin-top:4px;">
+                                                ✅ Real: Grabación/Whisper Android, SQLite Web+Android, Auth y Sync.<br />
+                                                🧪 Demostrativo: Grabadora en navegador web y respuestas locales de Koda.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (SelectedMeeting is not null)
+                                    {
+                                        <h3 style="font-size:calc(15px * var(--font-scale)); margin:0 0 8px 0;">
+                                            Metadatos técnicos de la reunión seleccionada (@GetCleanMeetingTitle(SelectedMeeting))
+                                        </h3>
+                                        <div class="card-elevated tabular-nums" style="margin-bottom:14px; font-size:calc(12.5px * var(--font-scale));">
+                                            UID: <code>@SelectedMeeting.SessionUid</code> ·
+                                            Archivo WAV: <code>@SelectedMeeting.LocalWavFileName</code> ·
+                                            Dispositivo origen: <code>@SelectedMeeting.OriginDevice</code> ·
+                                            Versión activa: <strong>v@(SelectedMeeting.ActiveTranscriptVersion)</strong> ·
+                                            SHA-256: <code>@SelectedMeeting.ActiveTranscriptSha256</code>
+                                        </div>
+
+                                        @if (SelectedMeeting.VersionHistory.Count > 0)
+                                        {
+                                            <h4 style="font-size:calc(14px * var(--font-scale)); margin:0 0 8px 0;">
+                                                Historial de versiones SHA-256 en SQLite (@SelectedMeeting.VersionHistory.Count)
+                                            </h4>
+                                            @foreach (var ver in SelectedMeeting.VersionHistory.OrderByDescending(v => v.VersionNumber))
+                                            {
+                                                <div class="tabular-nums" style="font-size:calc(12px * var(--font-scale)); background:var(--bg-elevated); padding:8px 12px; border-radius:8px; border:1px solid var(--border-subtle); margin-bottom:6px;">
+                                                    <strong>v@(ver.VersionNumber)</strong> · Origen: <code>@ver.ModifiedByDevice</code> ·
+                                                    SHA-256: <code>@ver.ContentSha256[..Math.Min(20, ver.ContentSha256.Length)]...</code> ·
+                                                    @ver.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+
+                <!-- =============================================================== -->
+                <!-- PANEL LATERAL DE KODA (SE ABRE A PETICIÓN SIN CUBRIR CONTENIDO) -->
+                <!-- =============================================================== -->
+                @if (IsKodaDrawerOpen && WebRecorderFlowStage != "recording")
+                {
+                    <aside class="koda-side-panel" aria-label="Compañero asistente Koda">
+                        <div class="koda-header">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div class="koda-mascot-badge">🐾</div>
+                                <div>
+                                    <div style="font-weight:800; font-size:calc(15px * var(--font-scale));">
+                                        @Store.PetName
+                                    </div>
+                                    <div style="font-size:calc(11.5px * var(--font-scale)); color:#E0F2F7;">
+                                        @GetPetStateLabel() · @(Store.IsPetVoiceMuted ? "Voz en silencio" : "Voz activa")
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn btn-hero-secondary btn-sm" @onclick="TogglePetMute" title="Silenciar o activar voz">
+                                    @(Store.IsPetVoiceMuted ? "🔇" : "🔊")
+                                </button>
+                                <button class="btn btn-hero-secondary btn-sm" @onclick="() => IsKodaDrawerOpen = false" title="Contraer panel">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="padding:14px;">
+                            <div style="font-size:calc(12px * var(--font-scale)); color:var(--text-muted); margin-bottom:8px;">
+                                Acciones rápidas sobre tus reuniones:
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+                                <button class="btn btn-outline btn-sm" @onclick='() => AskQuickQuestion("¿Qué acordamos ayer?")'>¿Qué acordamos?</button>
+                                <button class="btn btn-outline btn-sm" @onclick='() => AskQuickQuestion("¿Qué pendientes tengo?")'>Ver pendientes</button>
+                                <button class="btn btn-outline btn-sm" @onclick='() => AskQuickQuestion("¿Quién quedó responsable de enviar la cotización?")'>Responsable cotización</button>
+                            </div>
+
+                            <div style="max-height:240px; overflow-y:auto; background:var(--bg-elevated); padding:10px; border-radius:12px; border:1px solid var(--border-subtle); margin-bottom:10px;">
+                                @foreach (var msg in Store.AssistantHistory)
+                                {
+                                    <div style="margin-bottom:8px; text-align:@(msg.IsUser ? "right" : "left");">
+                                        <div style="display:inline-block; max-width:92%; padding:8px 11px; border-radius:10px; font-size:calc(12.5px * var(--font-scale)); background:@(msg.IsUser ? "var(--brand-teal)" : "#FFFFFF"); color:@(msg.IsUser ? "#FFFFFF" : "var(--text-primary)"); border:1px solid var(--border-subtle);">
+                                            <div>@msg.Text</div>
+                                            @if (!string.IsNullOrWhiteSpace(msg.EvidenceCitation))
+                                            {
+                                                <div style="font-size:calc(11px * var(--font-scale)); color:@(msg.IsUser ? "#E0F2F7" : "var(--brand-teal)"); margin-top:4px; border-top:1px solid var(--border-subtle); padding-top:4px;">
+                                                    📎 @msg.EvidenceCitation
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div style="display:flex; gap:6px;">
+                                <input type="text"
+                                       placeholder="Pregunta o escribe 'agrega tarea...'"
+                                       @bind="AssistantInput" />
+                                <button class="btn btn-teal btn-sm" @onclick="SendAssistantMessage">Enviar</button>
+                            </div>
+                        </div>
+                    </aside>
+                }
+            </main>
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")]
+    public string? QueryView { get; set; }
+
+    [SupplyParameterFromQuery(Name = "scale")]
+    public string? QueryScale { get; set; }
+
+    [SupplyParameterFromQuery(Name = "state")]
+    public string? QueryState { get; set; }
+
+    [SupplyParameterFromQuery(Name = "koda")]
+    public string? QueryKoda { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rec")]
+    public string? QueryRecStage { get; set; }
+
+    private bool IsAuthenticated;
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Authentication.GetAuthenticationStateAsync();
+        IsAuthenticated = state.User.Identity?.IsAuthenticated == true;
+        LoggedUser = state.User.Identity?.Name ?? string.Empty;
+    }
+    private string LoggedUser = string.Empty;
+    private string LoginUsername { get; set; } = "owner";
+    private string LoginPassword { get; set; } = string.Empty;
+    private string? LoginError { get; set; }
+
+    private string ActiveView { get; set; } = "dashboard";
+    private string DetailSubTab { get; set; } = "resumen";
+    private string SettingsSubTab { get; set; } = "general";
+    private string ChecklistFilter { get; set; } = "all";
+    private string FontScaleMode { get; set; } = "1";
+    private string FontScaleCss => FontScaleMode;
+    private string SimulatedUiState { get; set; } = "normal";
+    private bool IsKodaDrawerOpen { get; set; } = true;
+
+    private string SearchQuery { get; set; } = string.Empty;
+    private MeetingSessionDto? SelectedMeeting { get; set; }
+
+    private string NewWebSessionTitle { get; set; } = "Revisión de arquitectura y sincronización móvil";
+    private string WebRecorderFlowStage { get; set; } = "idle";
+    private string WebRecorderStatus { get; set; } = "Micrófono listo · Captura clara sin distracciones";
+    private string SimulatedTimerDisplay { get; set; } = "00:00";
+    private bool IsWebRecordingSimulated { get; set; } = false;
+    private List<string> CustomRecorderMarks { get; set; } = new();
+
+    private string AssistantInput { get; set; } = string.Empty;
+    private string NewTaskDescription { get; set; } = string.Empty;
+    private string NewTaskAssignee { get; set; } = "No especificado";
+    private string NewTaskDueDate { get; set; } = "No especificada";
+    private HashSet<string> CollapsedNodeIds { get; set; } = new();
+
+    private List<MeetingSessionDto> FilteredMeetings => Store.SearchMeetings(SearchQuery);
+    private int TotalPendingTasksCount => FilteredMeetings.Sum(m => m.Tasks.Count(t => !t.IsCompleted));
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(QueryView))
+        {
+            ActiveView = QueryView.ToLowerInvariant();
+            if (ActiveView == "checklist") DetailSubTab = "tareas";
+            if (ActiveView == "mindmap") DetailSubTab = "mapa";
+        }
+        if (!string.IsNullOrWhiteSpace(QueryScale) && (QueryScale == "1" || QueryScale == "1.15" || QueryScale == "1.30"))
+        {
+            FontScaleMode = QueryScale;
+        }
+        if (!string.IsNullOrWhiteSpace(QueryState))
+        {
+            SimulatedUiState = QueryState.ToLowerInvariant();
+        }
+        if (!string.IsNullOrWhiteSpace(QueryKoda))
+        {
+            IsKodaDrawerOpen = QueryKoda.Equals("open", StringComparison.OrdinalIgnoreCase);
+        }
+        if (!string.IsNullOrWhiteSpace(QueryRecStage))
+        {
+            SetWebFlowStage(QueryRecStage.ToLowerInvariant());
+        }
+        SelectedMeeting ??= FilteredMeetings.FirstOrDefault();
+    }
+
+    private string GetActiveDetailTab()
+    {
+        if (ActiveView == "checklist") return "tareas";
+        if (ActiveView == "mindmap") return "mapa";
+        return DetailSubTab;
+    }
+
+    private static string GetCleanMeetingTitle(MeetingSessionDto m)
+    {
+        if (string.IsNullOrWhiteSpace(m.Title)) return "Reunión sin título";
+        return m.Title
+            .Replace("Grabacion_Larga_30Min", "Sesión de Validación de Arquitectura y Telemetría")
+            .Replace("_", " ");
+    }
+
+    private int[] GetWaveformHeights() => WebRecorderFlowStage switch
+    {
+        "recording" => new[] { 18, 32, 48, 26, 54, 38, 22, 50, 34, 16, 44, 56, 28, 40, 24, 52, 36, 20, 46, 30, 18, 42, 26, 34 },
+        "paused" => new[] { 16, 24, 30, 20, 34, 26, 18, 30, 22, 14, 28, 32, 20, 26, 18, 30, 24, 16, 28, 22, 16, 24, 18, 20 },
+        _ => new[] { 12, 16, 20, 14, 24, 18, 12, 22, 16, 12, 20, 24, 14, 18, 12, 20, 16, 12, 18, 14, 12, 16, 12, 14 }
+    };
+
+    private void SetView(string view)
+    {
+        ActiveView = view;
+        SelectedMeeting ??= FilteredMeetings.FirstOrDefault();
+    }
+
+    private void SetFontScale(string scale)
+    {
+        FontScaleMode = scale;
+    }
+
+    private void StartOrOpenWebRecorder()
+    {
+        if (WebRecorderFlowStage == "idle")
+        {
+            StartWebRecorder();
+        }
+        ActiveView = "record";
+    }
+
+    private void StartWebRecorder()
+    {
+        SetWebFlowStage("recording");
+    }
+
+    private void PauseWebRecorder()
+    {
+        SetWebFlowStage("paused");
+    }
+
+    private void ResumeWebRecorder()
+    {
+        SetWebFlowStage("recording");
+    }
+
+    private void StopAndSaveWebRecorder()
+    {
+        SetWebFlowStage("saved");
+    }
+
+    private void SetWebFlowStage(string stage)
+    {
+        WebRecorderFlowStage = stage;
+        switch (stage)
+        {
+            case "recording":
+                IsWebRecordingSimulated = true;
+                SimulatedTimerDisplay = "14:28";
+                WebRecorderStatus = "Koda en silencio · Capturando audio limpio sin interrupciones";
+                Store.IsPetVoiceMuted = true;
+                break;
+            case "paused":
+                IsWebRecordingSimulated = false;
+                SimulatedTimerDisplay = "28:45";
+                WebRecorderStatus = "Audio en espera · Puedes retomar o detener y guardar cuando quieras";
+                break;
+            case "saved":
+                IsWebRecordingSimulated = false;
+                SimulatedTimerDisplay = "47:06";
+                WebRecorderStatus = "Archivo guardado de forma segura · Listo para escuchar o resumir";
+                break;
+            case "processing":
+                IsWebRecordingSimulated = false;
+                SimulatedTimerDisplay = "47:06";
+                WebRecorderStatus = "Extrayendo acuerdos, responsables y fechas clave...";
+                break;
+            case "ready":
+                IsWebRecordingSimulated = false;
+                SimulatedTimerDisplay = "47:06";
+                WebRecorderStatus = "Resumen, acuerdos y tareas verificados con citas";
+                break;
+            default:
+                WebRecorderFlowStage = "idle";
+                IsWebRecordingSimulated = false;
+                SimulatedTimerDisplay = "00:00";
+                WebRecorderStatus = "Micrófono listo · Captura clara sin distracciones";
+                break;
+        }
+    }
+
+    private void AddRecorderMark()
+    {
+        string markTime = SimulatedTimerDisplay == "00:00" ? "01:15" : SimulatedTimerDisplay;
+        CustomRecorderMarks.Add($"{markTime} Nota clave");
+    }
+
+    private void PerformLogin() => Nav.NavigateTo("/login", forceLoad: true);
+
+    private void Logout() => Nav.NavigateTo("/logout", forceLoad: true);
+
+    private void RefreshMeetingsFromStore()
+    {
+        var currentUid = SelectedMeeting?.SessionUid;
+        SelectedMeeting = (currentUid is not null ? Store.GetMeetingByUid(currentUid) : null)
+            ?? FilteredMeetings.FirstOrDefault();
+    }
+
+    private void SelectMeeting(MeetingSessionDto meeting)
+    {
+        SelectedMeeting = meeting;
+    }
+
+    private IEnumerable<TaskChecklistItemDto> GetFilteredTasks(MeetingSessionDto meeting) => ChecklistFilter switch
+    {
+        "pending" => meeting.Tasks.Where(t => !t.IsCompleted),
+        "done" => meeting.Tasks.Where(t => t.IsCompleted),
+        _ => meeting.Tasks
+    };
+
+    private void TogglePetMute()
+    {
+        Store.IsPetVoiceMuted = !Store.IsPetVoiceMuted;
+    }
+
+    private void AskQuickQuestion(string q)
+    {
+        Store.AskAssistant(q);
+    }
+
+    private void SendAssistantMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(AssistantInput))
+        {
+            Store.AskAssistant(AssistantInput);
+            AssistantInput = string.Empty;
+        }
+    }
+
+    private void OnSegmentEdited(int segmentNumber, string newText)
+    {
+        if (SelectedMeeting is not null)
+        {
+            Store.UpdateTranscriptSegment(SelectedMeeting, segmentNumber, newText, "Web Blazor");
+        }
+    }
+
+    private void RevalidateCurrentMeeting()
+    {
+        if (SelectedMeeting is not null)
+        {
+            Store.RevalidateAndSyncSummaryVersion(SelectedMeeting);
+        }
+    }
+
+    private void ToggleTopicConfirmation(MeetingTopicDto topic)
+    {
+        if (SelectedMeeting is null) return;
+        topic.ConfirmationStatus = topic.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser
+            ? UserConfirmationStatus.PendingReview
+            : UserConfirmationStatus.ConfirmedByUser;
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void ToggleAgreementConfirmation(MeetingAgreementDto agr)
+    {
+        if (SelectedMeeting is null) return;
+        agr.ConfirmationStatus = agr.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser
+            ? UserConfirmationStatus.PendingReview
+            : UserConfirmationStatus.ConfirmedByUser;
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void OnTaskCompletedChanged(TaskChecklistItemDto task, bool isCompleted)
+    {
+        if (SelectedMeeting is null) return;
+        task.IsCompleted = isCompleted;
+        task.LastModifiedByDevice = "Web Blazor";
+        task.UpdatedAtUtc = DateTime.UtcNow;
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void OnTaskAssigneeChanged(TaskChecklistItemDto task, string newAssignee)
+    {
+        if (SelectedMeeting is null) return;
+        task.Assignee = string.IsNullOrWhiteSpace(newAssignee) ? "No especificado" : newAssignee.Trim();
+        task.LastModifiedByDevice = "Web Blazor";
+        task.UpdatedAtUtc = DateTime.UtcNow;
+        SummaryEvidenceValidator.ValidateMeetingEvidence(SelectedMeeting);
+        MindMapGenerator.BuildFromExistingSummary(SelectedMeeting);
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void OnTaskDueDateChanged(TaskChecklistItemDto task, string newDueDate)
+    {
+        if (SelectedMeeting is null) return;
+        task.DueDateText = string.IsNullOrWhiteSpace(newDueDate) ? "No especificada" : newDueDate.Trim();
+        task.LastModifiedByDevice = "Web Blazor";
+        task.UpdatedAtUtc = DateTime.UtcNow;
+        SummaryEvidenceValidator.ValidateMeetingEvidence(SelectedMeeting);
+        MindMapGenerator.BuildFromExistingSummary(SelectedMeeting);
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void ToggleTaskConfirmation(TaskChecklistItemDto task)
+    {
+        if (SelectedMeeting is null) return;
+        task.ConfirmationStatus = task.ConfirmationStatus == UserConfirmationStatus.ConfirmedByUser
+            ? UserConfirmationStatus.PendingReview
+            : UserConfirmationStatus.ConfirmedByUser;
+        task.LastModifiedByDevice = "Web Blazor";
+        task.UpdatedAtUtc = DateTime.UtcNow;
+        SummaryEvidenceValidator.ValidateMeetingEvidence(SelectedMeeting);
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void AddManualTask()
+    {
+        if (SelectedMeeting is null || string.IsNullOrWhiteSpace(NewTaskDescription)) return;
+
+        SelectedMeeting.Tasks.Add(new TaskChecklistItemDto
+        {
+            SessionUid = SelectedMeeting.SessionUid,
+            SessionTitle = SelectedMeeting.Title,
+            Description = NewTaskDescription.Trim(),
+            Assignee = string.IsNullOrWhiteSpace(NewTaskAssignee) ? "No especificado" : NewTaskAssignee.Trim(),
+            DueDateText = string.IsNullOrWhiteSpace(NewTaskDueDate) ? "No especificada" : NewTaskDueDate.Trim(),
+            Origin = TaskOriginType.UserDictated,
+            ConfirmationStatus = UserConfirmationStatus.ConfirmedByUser,
+            EvidenceQuote = "Creada manualmente por el usuario en el checklist web",
+            TimestampReference = "Manual",
+            LastModifiedByDevice = "Web Blazor",
+            UpdatedAtUtc = DateTime.UtcNow
+        });
+
+        NewTaskDescription = string.Empty;
+        NewTaskAssignee = "No especificado";
+        NewTaskDueDate = "No especificada";
+        MindMapGenerator.BuildFromExistingSummary(SelectedMeeting);
+        Store.SaveMeeting(SelectedMeeting);
+    }
+
+    private void RegenerateMindMapFree()
+    {
+        if (SelectedMeeting is not null)
+        {
+            MindMapGenerator.BuildFromExistingSummary(SelectedMeeting);
+            Store.SaveMeeting(SelectedMeeting);
+        }
+    }
+
+    private void ToggleNodeCollapse(string nodeUid)
+    {
+        if (!CollapsedNodeIds.Add(nodeUid))
+        {
+            CollapsedNodeIds.Remove(nodeUid);
+        }
+    }
+
+    private RenderFragment RenderMindMapNode(MindMapNodeDto node, MindMapNodeDto? parent) => __builder =>
+    {
+        bool isCollapsed = CollapsedNodeIds.Contains(node.Label);
+        <div class="mindmap-node">
+            @if (node.Children.Count > 0)
+            {
+                <button class="btn btn-outline btn-sm" @onclick="() => ToggleNodeCollapse(node.Label)" title="Contraer o expandir rama">
+                    @(isCollapsed ? $"▶ ({node.Children.Count})" : "▼")
+                </button>
+            }
+            <span class="badge @GetMindMapCategoryClass(node.Category)">@node.Category.ToUpperInvariant()</span>
+            <input type="text"
+                   value="@node.Label"
+                   @onchange="(e) => { node.Label = e.Value?.ToString() ?? string.Empty; if (SelectedMeeting is not null) Store.SaveMeeting(SelectedMeeting); }"
+                   style="flex:1;" />
+            @if (!string.IsNullOrWhiteSpace(node.ReferenceTimestamp))
+            {
+                <span class="tabular-nums" style="font-size:calc(11.5px * var(--font-scale)); color:var(--brand-teal);">[@node.ReferenceTimestamp]</span>
+            }
+            <button class="btn btn-outline btn-sm" title="Agregar sub-nodo" @onclick="() => AddChildNode(node)">+ Subtema</button>
+            @if (parent is not null)
+            {
+                <button class="btn btn-outline btn-sm" title="Eliminar nodo" @onclick="() => { parent.Children.Remove(node); if (SelectedMeeting is not null) Store.SaveMeeting(SelectedMeeting); }">✕</button>
+            }
+        </div>
+        @if (node.Children.Count > 0 && !isCollapsed)
+        {
+            <ul>
+                @foreach (var child in node.Children.ToList())
+                {
+                    <li>
+                        @RenderMindMapNode(child, node)
+                    </li>
+                }
+            </ul>
+        }
+    };
+
+    private void AddChildNode(MindMapNodeDto parent)
+    {
+        parent.Children.Add(new MindMapNodeDto
+        {
+            Label = "Nuevo subtema o nota",
+            Category = "custom"
+        });
+        if (SelectedMeeting is not null)
+        {
+            Store.SaveMeeting(SelectedMeeting);
+        }
+    }
+
+    private static string GetCitationBadgeClass(CitationMatchStatus status) => status switch
+    {
+        CitationMatchStatus.QuoteFoundExact => "badge-exact",
+        CitationMatchStatus.QuoteFoundPartial => "badge-partial",
+        _ => "badge-missing"
+    };
+
+    private static string GetCitationBadgeText(CitationMatchStatus status) => status switch
+    {
+        CitationMatchStatus.QuoteFoundExact => "Cita exacta en transcripción",
+        CitationMatchStatus.QuoteFoundPartial => "Cita parcial en transcripción",
+        _ => "Cita no localizada"
+    };
+
+    private static string GetMindMapCategoryClass(string category) => category switch
+    {
+        "root" => "badge-teal",
+        "topic" => "badge-ready",
+        "agreement" => "badge-pause",
+        "task" => "badge-neutral",
+        _ => "badge-neutral"
+    };
+
+    private string GetPetStateLabel() => Store.PetState switch
+    {
+        PetAssistantVisualState.Listening => "Escuchando",
+        PetAssistantVisualState.Processing => "Buscando en tus reuniones...",
+        PetAssistantVisualState.Speaking => "Respondiendo",
+        PetAssistantVisualState.Error => "Atención",
+        _ => "En reposo"
+    };
+}
