@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Web/tests: .NET 9 SDK and runtime.
+- Restore/build: the current shared project also targets net11.0, so use the matching .NET 11 preview SDK. Web/tests run on the .NET 9 runtime.
 - Android: the current project targets .NET 11 preview, the corresponding MAUI Android workload, Android SDK and JDK. Preview workload compatibility must be checked for your machine.
 - A Whisper model compatible with Whisper.net 1.9.1. Model weights are not bundled; check their license and origin.
 
