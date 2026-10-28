@@ -8,6 +8,7 @@ Aplicación Android con un espacio web complementario para organizar transcripci
 
 Android permite grabar, pausar, continuar, reproducir y recuperar archivos WAV interrumpidos. La transcripción local utiliza Whisper.net y necesita un modelo externo. La web conserva reuniones en SQLite y permite consultar y editar información sincronizada.
 
+- [Continuar en otra computadora](docs/SECOND_COMPUTER.md)
 - [Instalación y configuración](docs/SETUP.md)
 - [Arquitectura y límites](docs/ARCHITECTURE.md)
 - [Contribuciones](CONTRIBUTING.md)

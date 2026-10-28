@@ -22,9 +22,9 @@ The web recorder is a clearly labeled simulation. The current assistant uses app
 
 ## Development
 
-The web and test projects target .NET 9. Android currently targets .NET 11 preview with MAUI and Android API 26 or newer. These inherited targets need a supported stable SDK migration before a stable release.
+The web and test projects target .NET 9. Restoring the current multi-target shared project requires the matching .NET 11 preview SDK. Android currently targets .NET 11 preview with MAUI and Android API 26 or newer. These inherited targets need a supported stable SDK migration before a stable release.
 
-See [setup](docs/SETUP.md) for configuration. No recordings, databases, model weights, API keys or signing keys are included.
+See [setup](docs/SETUP.md) for configuration and [the second-computer guide](docs/SECOND_COMPUTER.md) to continue elsewhere. No recordings, databases, model weights, API keys or signing keys are included.
 
 ```sh
 dotnet test tests/KodaMemo.Tests/KodaMemo.Tests.csproj
