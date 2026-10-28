@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+ xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+ xmlns:vm="clr-namespace:KodaMemo.ViewModels"
+ xmlns:models="clr-namespace:KodaMemo.Models"
+ x:Class="KodaMemo.MainPage" x:DataType="vm:MainViewModel"
+ Title="KodaMemo" BackgroundColor="#F2F6F8" Shell.NavBarIsVisible="False">
+ <ContentPage.Resources>
+  <Color x:Key="Teal">#0F4C5C</Color>
+  <Color x:Key="Ink">#172E3A</Color>
+  <Color x:Key="Muted">#546976</Color>
+  <Style TargetType="Label">
+   <Setter Property="TextColor" Value="{StaticResource Ink}"/>
+   <Setter Property="FontFamily" Value="OpenSansRegular"/>
+   <Setter Property="FontSize" Value="15"/>
+  </Style>
+  <Style TargetType="Button">
+   <Setter Property="FontFamily" Value="OpenSansSemibold"/>
+   <Setter Property="FontSize" Value="14"/>
+   <Setter Property="CornerRadius" Value="16"/>
+   <Setter Property="MinimumHeightRequest" Value="52"/>
+   <Setter Property="Padding" Value="12,8"/>
+   <Setter Property="TextTransform" Value="None"/>
+   <Setter Property="BackgroundColor" Value="#E5EFF2"/>
+   <Setter Property="TextColor" Value="#0F4C5C"/>
+  </Style>
+  <Style x:Key="CoralButton" TargetType="Button">
+   <Setter Property="BackgroundColor" Value="#F25F4C"/>
+   <Setter Property="TextColor" Value="#281813"/>
+   <Setter Property="FontAttributes" Value="Bold"/>
+   <Setter Property="MinimumHeightRequest" Value="58"/>
+  </Style>
+  <Style x:Key="Card" TargetType="Border">
+   <Setter Property="BackgroundColor" Value="White"/>
+   <Setter Property="Stroke" Value="#E0E9ED"/>
+   <Setter Property="StrokeShape" Value="RoundRectangle 22"/>
+   <Setter Property="Padding" Value="18"/>
+   <Setter Property="Shadow"><Setter.Value><Shadow Brush="#183E4C" Offset="0,4" Radius="12" Opacity="0.07"/></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="Heading" TargetType="Label">
+   <Setter Property="FontFamily" Value="OpenSansSemibold"/>
+   <Setter Property="FontSize" Value="20"/>
+  </Style>
+  <DataTemplate x:Key="SessionCard" x:DataType="models:RecordingSession">
+   <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+    <VerticalStackLayout Spacing="10">
+     <Label Text="{Binding Title}" FontFamily="OpenSansSemibold" FontSize="17" LineBreakMode="WordWrap"/>
+     <HorizontalStackLayout Spacing="12">
+      <Label Text="{Binding FormattedDateLocal}" TextColor="{StaticResource Muted}" FontSize="12"/>
+      <Label Text="{Binding FormattedDuration}" TextColor="{StaticResource Muted}" FontSize="12"/>
+     </HorizontalStackLayout>
+     <Label Text="{Binding StateBadgeText}" TextColor="{StaticResource Teal}" FontSize="12"/>
+     <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+      <Button Text="▷ Reproducir" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=PlaySessionCommand}" CommandParameter="{Binding .}"/>
+      <Button Grid.Column="1" Text="Ver reunión →" BackgroundColor="#0F4C5C" TextColor="White" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=OpenSessionDetailCommand}" CommandParameter="{Binding .}"/>
+     </Grid>
+    </VerticalStackLayout>
+   </Border>
+  </DataTemplate>
+ </ContentPage.Resources>
+
+ <!-- Controls occupy their own rows, never the scrolling content. -->
+ <Grid RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" RowSpacing="0" SafeAreaEdges="Container">
+  <Grid Padding="18,12" ColumnDefinitions="*,Auto" BackgroundColor="#F2F6F8">
+   <VerticalStackLayout Spacing="2">
+    <Label Text="TU ESPACIO PARA ESCUCHAR" FontSize="10" CharacterSpacing="1.4" TextColor="{StaticResource Muted}"/>
+    <Label Text="{Binding PageHeading}" FontSize="22" FontFamily="OpenSansSemibold" TextColor="{StaticResource Teal}"/>
+   </VerticalStackLayout>
+   <Button Grid.Column="1" Text="Koda" Command="{Binding ToggleKodaCommand}" MinimumWidthRequest="60" SemanticProperties.Description="Abrir o cerrar el asistente Koda"/>
+  </Grid>
+
+  <ScrollView Grid.Row="1">
+   <VerticalStackLayout Padding="18,6,18,18" Spacing="16">
+    <Border Style="{StaticResource Card}" IsVisible="{Binding HasRecoveryBanner}" BackgroundColor="#FFF4DE">
+     <Label Text="{Binding RecoveryBannerText}" FontSize="13"/>
+    </Border>
+
+    <VerticalStackLayout IsVisible="{Binding IsHomeTab}" Spacing="18">
+     <VerticalStackLayout Spacing="4">
+      <Label Text="Dale espacio a tus ideas." FontSize="27" FontFamily="OpenSansSemibold"/>
+      <Label Text="Tú participa. Tus reuniones quedan aquí." TextColor="{StaticResource Muted}"/>
+     </VerticalStackLayout>
+     <Border Style="{StaticResource Card}">
+      <VerticalStackLayout Spacing="14">
+       <Label Text="Una conversación. Todo en orden." Style="{StaticResource Heading}"/>
+       <Label Text="Graba ahora y vuelve a escuchar lo importante cuando lo necesites." TextColor="{StaticResource Muted}"/>
+       <Button Text="●  Grabar reunión" Style="{StaticResource CoralButton}" Command="{Binding StartRecordingCommand}" IsEnabled="{Binding CanStartRecording}"/>
+       <Button Text="Abrir grabadora →" Command="{Binding SelectTabCommand}" CommandParameter="record"/>
+      </VerticalStackLayout>
+     </Border>
+     <Grid ColumnDefinitions="*,Auto">
+      <Label Text="Reuniones recientes" Style="{StaticResource Heading}" VerticalOptions="Center"/>
+      <Button Grid.Column="1" Text="Ver todas" Command="{Binding SelectTabCommand}" CommandParameter="sessions" BackgroundColor="Transparent"/>
+     </Grid>
+     <VerticalStackLayout BindableLayout.ItemsSource="{Binding RecentSessions}" BindableLayout.ItemTemplate="{StaticResource SessionCard}">
+      <BindableLayout.EmptyView><Label Text="Tu primera reunión empieza con el botón Grabar." TextColor="{StaticResource Muted}" Margin="0,8"/></BindableLayout.EmptyView>
+     </VerticalStackLayout>
+     <Border Style="{StaticResource Card}" BackgroundColor="#E5F0F2">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+       <VerticalStackLayout Spacing="5">
+        <Label Text="Lo que sigue" Style="{StaticResource Heading}"/>
+        <Label Text="{Binding PendingTaskCount, StringFormat='{0} pendientes guardados'}"/>
+       </VerticalStackLayout>
+       <Button Grid.Column="1" Text="Revisar →" Command="{Binding SelectTabCommand}" CommandParameter="tasks"/>
+      </Grid>
+     </Border>
+    </VerticalStackLayout>
+
+    <VerticalStackLayout IsVisible="{Binding IsSessionsTab}" Spacing="12">
+     <Label Text="Cada conversación, a mano." Style="{StaticResource Heading}"/>
+     <Button Text="Actualizar reuniones" Command="{Binding RefreshSessionsCommand}"/>
+     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Sessions}" BindableLayout.ItemTemplate="{StaticResource SessionCard}">
+      <BindableLayout.EmptyView><Label Text="Todavía no hay grabaciones. Crea una desde Inicio." Margin="0,20"/></BindableLayout.EmptyView>
+     </VerticalStackLayout>
+    </VerticalStackLayout>
+
+    <VerticalStackLayout IsVisible="{Binding IsRecordTab}" Spacing="16">
+     <Button Text="← Minimizar grabadora" Command="{Binding SelectTabCommand}" CommandParameter="home" BackgroundColor="Transparent" HorizontalOptions="Start"/>
+     <Border StrokeThickness="0" StrokeShape="RoundRectangle 26" BackgroundColor="#0F4C5C" Padding="22">
+      <VerticalStackLayout Spacing="14">
+       <Label Text="{Binding RecordingStateLabel}" TextColor="#FFD1C9" FontFamily="OpenSansSemibold" FontSize="16" SemanticProperties.Description="Estado actual de grabación"/>
+       <Entry Text="{Binding NewSessionTitle}" Placeholder="Nombre de la reunión (opcional)" IsVisible="{Binding CanStartRecording}" BackgroundColor="#E6F1F3" TextColor="#172E3A" PlaceholderColor="#546976" MinimumHeightRequest="48"/>
+       <Label Text="{Binding ActiveRecordingTitle}" TextColor="White" FontSize="20" FontFamily="OpenSansSemibold" IsVisible="{Binding CanStopRecording}"/>
+       <Label Text="{Binding ElapsedTimeText}" FontSize="{Binding ScaledTimerFontSize}" TextColor="White" FontFamily="OpenSansSemibold" HorizontalTextAlignment="Center" Margin="0,10" MaxLines="1" LineBreakMode="NoWrap"/>
+       <Label Text="Tiempo grabado" TextColor="#C1DEE5" HorizontalTextAlignment="Center" FontSize="13"/>
+       <GraphicsView x:Name="AudioLevelView" HeightRequest="62" SemanticProperties.Description="Historial del nivel del micrófono"/>
+       <Label Text="Nivel del micrófono" TextColor="#C1DEE5" FontSize="12" HorizontalTextAlignment="Center"/>
+      </VerticalStackLayout>
+     </Border>
+     <Border Style="{StaticResource Card}">
+      <VerticalStackLayout Spacing="6">
+       <Label Text="Tu conversación, sin distracciones" FontFamily="OpenSansSemibold"/>
+       <Label Text="Puedes apagar la pantalla o volver a Inicio. Los controles siguen disponibles en la notificación." TextColor="{StaticResource Muted}" FontSize="13"/>
+       <Label Text="Koda permanece en silencio mientras grabas." TextColor="{StaticResource Teal}" FontSize="13"/>
+      </VerticalStackLayout>
+     </Border>
+    </VerticalStackLayout>
+
+    <VerticalStackLayout IsVisible="{Binding IsDetailTab}" Spacing="16">
+     <Border Style="{StaticResource Card}" BackgroundColor="#E0F2E9" IsVisible="{Binding IsSessionSaved}">
+      <Label Text="✓ Grabación guardada. Ya puedes escucharla o transcribirla." TextColor="#17553D"/>
+     </Border>
+     <Label Text="{Binding SelectedPlaybackSession.Title, TargetNullValue='Selecciona una reunión', FallbackValue='Selecciona una reunión'}" FontSize="24" FontFamily="OpenSansSemibold"/>
+     <Border Style="{StaticResource Card}">
+      <VerticalStackLayout Spacing="14">
+       <Label Text="Vuelve a escuchar" Style="{StaticResource Heading}"/>
+       <Label Text="{Binding PlaybackProgressText}" HorizontalTextAlignment="Center" TextColor="{StaticResource Teal}"/>
+       <ProgressBar Progress="{Binding PlaybackProgressRatio}" ProgressColor="#0F4C5C" BackgroundColor="#E0E9ED"/>
+       <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+        <Button Text="▷ Reproducir / pausa" Command="{Binding PlaySessionCommand}" CommandParameter="{Binding SelectedPlaybackSession}"/>
+        <Button Grid.Column="1" Text="■ Detener audio" Command="{Binding StopPlaybackCommand}"/>
+       </Grid>
+      </VerticalStackLayout>
+     </Border>
+     <Border Style="{StaticResource Card}">
+      <VerticalStackLayout Spacing="12">
+       <Label Text="Transcripción" Style="{StaticResource Heading}"/>
+       <Label Text="Procesada en tu teléfono, sin enviar el audio." TextColor="{StaticResource Muted}" FontSize="13"/>
+       <Button Text="Transcribir esta reunión" Command="{Binding TranscribeSessionLocalCommand}" CommandParameter="{Binding SelectedPlaybackSession}" BackgroundColor="#0F4C5C" TextColor="White"/>
+       <ActivityIndicator IsRunning="{Binding IsTranscribing}" IsVisible="{Binding IsTranscribing}" Color="#0F4C5C"/>
+       <Label Text="{Binding LatestTranscriptText}" FontSize="{Binding ScaledBodyFontSize}" LineBreakMode="WordWrap"/>
+       <Label Text="Los resúmenes con IA todavía no están conectados en Android. Puedes consultar las tareas sincronizadas en Pendientes." FontSize="13" TextColor="{StaticResource Muted}"/>
+      </VerticalStackLayout>
+     </Border>
+     <Button Text="Eliminar esta grabación" Command="{Binding DeleteSessionWithConfirmationCommand}" CommandParameter="{Binding SelectedPlaybackSession}" BackgroundColor="#FDEDE9" TextColor="#9A3024"/>
+    </VerticalStackLayout>
+
+    <VerticalStackLayout IsVisible="{Binding IsTasksTab}" Spacing="12">
+     <Label Text="Un paso a la vez." Style="{StaticResource Heading}"/>
+     <Label Text="{Binding PendingTaskCount, StringFormat='{0} tareas por completar'}" TextColor="{StaticResource Muted}"/>
+     <Label Text="Pulsa el círculo para completar o reabrir una tarea." FontSize="13" TextColor="{StaticResource Muted}"/>
+     <VerticalStackLayout BindableLayout.ItemsSource="{Binding MeetingTasks}">
+      <BindableLayout.EmptyView><Label Text="No hay tareas guardadas. Sincroniza tus reuniones para traer los pendientes de la web." Margin="0,20"/></BindableLayout.EmptyView>
+      <BindableLayout.ItemTemplate>
+       <DataTemplate x:DataType="models:TaskChecklistEntity">
+        <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+          <Button Text="○" FontSize="22" MinimumWidthRequest="48" Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MainViewModel}}, Path=ToggleTaskCommand}" CommandParameter="{Binding .}" SemanticProperties.Description="Completar o reabrir tarea">
+           <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsCompleted}" Value="True"><Setter Property="Text" Value="✓"/><Setter Property="BackgroundColor" Value="#D8EDE2"/></DataTrigger></Button.Triggers>
+          </Button>
+          <VerticalStackLayout Grid.Column="1" Spacing="4">
+           <Label Text="{Binding Description}" FontFamily="OpenSansSemibold">
+            <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding IsCompleted}" Value="True"><Setter Property="TextDecorations" Value="Strikethrough"/><Setter Property="TextColor" Value="#546976"/></DataTrigger></Label.Triggers>
+           </Label>
+           <Label Text="{Binding Assignee}" FontSize="12" TextColor="{StaticResource Muted}"/>
+           <Label Text="{Binding DueDateText}" FontSize="12" TextColor="{StaticResource Teal}"/>
+           <Label Text="{Binding SessionTitle}" FontSize="11" TextColor="{StaticResource Muted}"/>
+          </VerticalStackLayout>
+         </Grid>
+        </Border>
+       </DataTemplate>
+      </BindableLayout.ItemTemplate>
+     </VerticalStackLayout>
+    </VerticalStackLayout>
+
+    <VerticalStackLayout IsVisible="{Binding IsSettingsTab}" Spacing="16">
+     <Border Style="{StaticResource Card}">
+      <VerticalStackLayout Spacing="12">
+       <Label Text="A tu manera" Style="{StaticResource Heading}"/>
+       <Button Text="{Binding FontScaleBadgeText}" Command="{Binding CycleFontScaleCommand}"/>
+       <Entry Text="{Binding SyncServerUrl}" Placeholder="URL del servidor (HTTPS o localhost)" Keyboard="Url" TextColor="#172E3A" BackgroundColor="#F2F6F8" MinimumHeightRequest="48"/>
+       <Entry Text="{Binding SyncTokenInput}" Placeholder="Token de sincronización" IsPassword="True" TextColor="#172E3A" BackgroundColor="#F2F6F8" MinimumHeightRequest="48"/>
+       <Button Text="Guardar conexión" Command="{Binding SaveSyncSettingsCommand}"/>
+       <Button Text="Sincronizar con la web" Command="{Binding SyncToWebCommand}" BackgroundColor="#0F4C5C" TextColor="White"/>
+       <Label Text="{Binding SyncStatusText}" FontSize="13" LineBreakMode="WordWrap"/>
+       <Label Text="{Binding MonthlyBudgetUsd, StringFormat='Presupuesto configurado: US\u0024{0:F2} / mes'}" FontFamily="OpenSansSemibold"/>
+       <Label Text="El control de presupuesto de Android no sustituye los controles de facturación del proveedor." TextColor="{StaticResource Muted}" FontSize="13"/>
+      </VerticalStackLayout>
+     </Border>
+     <Border Style="{StaticResource Card}">
+      <VerticalStackLayout Spacing="12">
+       <Label Text="Diagnóstico" Style="{StaticResource Heading}"/>
+       <Label Text="{Binding LatestSttMetricsText}" FontSize="12" LineBreakMode="WordWrap"/>
+       <Label Text="{Binding MicArbitrationText}" FontSize="12"/>
+       <Label Text="{Binding BytesWrittenText, StringFormat='Audio escrito: {0}'}" FontSize="12"/>
+       <Button Text="Revisar archivos recuperables" Command="{Binding CheckCrashRecoveryNowCommand}"/>
+       <Label Text="Catálogo local de tarifas (consulta la fecha antes de usarlo)" FontSize="12"/>
+       <VerticalStackLayout BindableLayout.ItemsSource="{Binding PricingCatalog}">
+        <BindableLayout.ItemTemplate><DataTemplate x:DataType="models:ModelPricingCatalogEntity"><Label Text="{Binding ModelId}" FontSize="12" Margin="0,4"/></DataTemplate></BindableLayout.ItemTemplate>
+       </VerticalStackLayout>
+      </VerticalStackLayout>
+     </Border>
+    </VerticalStackLayout>
+
+    <Border Style="{StaticResource Card}" IsVisible="{Binding IsKodaExpanded}" BackgroundColor="#E5F0F2">
+     <VerticalStackLayout Spacing="10">
+      <Label Text="Koda · Asistente local" Style="{StaticResource Heading}"/>
+      <Label Text="Consultas básicas por reglas. Conversación con IA y voz pendientes de conexión." FontSize="12" TextColor="{StaticResource Muted}"/>
+      <Label Text="{Binding KodaQuickReplyText}" FontSize="14"/>
+      <Button Text="¿Qué tengo pendiente?" Command="{Binding AskKodaQuickCommand}" CommandParameter="pendientes"/>
+      <Button Text="Cerrar Koda" Command="{Binding ToggleKodaCommand}"/>
+     </VerticalStackLayout>
+    </Border>
+   </VerticalStackLayout>
+  </ScrollView>
+
+  <Label Grid.Row="2" Text="{Binding StatusMessage}" MaxLines="2" LineBreakMode="TailTruncation" FontSize="12" TextColor="#546976" Margin="18,6" SemanticProperties.Description="Estado de la última operación"/>
+
+  <Border Grid.Row="3" Margin="12,4" Padding="12,8" BackgroundColor="#0F4C5C" StrokeThickness="0" StrokeShape="RoundRectangle 18" IsVisible="{Binding ShowCompactRecorder}">
+   <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+    <VerticalStackLayout VerticalOptions="Center">
+     <Label Text="{Binding RecordingStateLabel}" TextColor="White" FontSize="12"/>
+     <Label Text="{Binding ElapsedTimeText}" TextColor="#C1DEE5" FontSize="16"/>
+    </VerticalStackLayout>
+    <Button Grid.Column="1" Text="Ⅱ Pausar" IsVisible="{Binding CanPauseRecording}" Command="{Binding PauseRecordingCommand}" MinimumHeightRequest="48"/>
+    <Button Grid.Column="1" Text="▷ Seguir" IsVisible="{Binding CanResumeRecording}" Command="{Binding ResumeRecordingCommand}" MinimumHeightRequest="48"/>
+    <Button Grid.Column="2" Text="Volver →" Style="{StaticResource CoralButton}" Command="{Binding SelectTabCommand}" CommandParameter="record" MinimumHeightRequest="48"/>
+   </Grid>
+  </Border>
+
+  <Border Grid.Row="4" Padding="16,10" BackgroundColor="White" Stroke="#E0E9ED" IsVisible="{Binding IsRecordTab}">
+   <VerticalStackLayout Spacing="8">
+    <Button Text="●  Grabar reunión" IsVisible="{Binding CanStartRecording}" Command="{Binding StartRecordingCommand}" Style="{StaticResource CoralButton}"/>
+    <Grid ColumnDefinitions="*,1.5*" ColumnSpacing="10" IsVisible="{Binding CanStopRecording}">
+     <Button Text="Ⅱ Pausar" IsVisible="{Binding CanPauseRecording}" Command="{Binding PauseRecordingCommand}" MinimumHeightRequest="58"/>
+     <Button Text="▷ Continuar" IsVisible="{Binding CanResumeRecording}" Command="{Binding ResumeRecordingCommand}" BackgroundColor="#FFF0CE" TextColor="#674A08" MinimumHeightRequest="58"/>
+     <Button Grid.Column="1" Text="■ Detener y guardar" Command="{Binding StopRecordingCommand}" Style="{StaticResource CoralButton}" FontSize="13"/>
+    </Grid>
+   </VerticalStackLayout>
+  </Border>
+
+  <Grid Grid.Row="5" ColumnDefinitions="*,*,*,*" ColumnSpacing="4" Padding="8,6" BackgroundColor="White">
+   <Button Text="Inicio" Command="{Binding SelectTabCommand}" CommandParameter="home" BackgroundColor="Transparent" FontSize="12">
+    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsHomeTab}" Value="True"><Setter Property="BackgroundColor" Value="#DCEFF3"/></DataTrigger></Button.Triggers>
+   </Button>
+   <Button Grid.Column="1" Text="Reuniones" Command="{Binding SelectTabCommand}" CommandParameter="sessions" BackgroundColor="Transparent" FontSize="12">
+    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsSessionsTab}" Value="True"><Setter Property="BackgroundColor" Value="#DCEFF3"/></DataTrigger></Button.Triggers>
+   </Button>
+   <Button Grid.Column="2" Text="Pendientes" Command="{Binding SelectTabCommand}" CommandParameter="tasks" BackgroundColor="Transparent" FontSize="12">
+    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsTasksTab}" Value="True"><Setter Property="BackgroundColor" Value="#DCEFF3"/></DataTrigger></Button.Triggers>
+   </Button>
+   <Button Grid.Column="3" Text="Ajustes" Command="{Binding SelectTabCommand}" CommandParameter="settings" BackgroundColor="Transparent" FontSize="12">
+    <Button.Triggers><DataTrigger TargetType="Button" Binding="{Binding IsSettingsTab}" Value="True"><Setter Property="BackgroundColor" Value="#DCEFF3"/></DataTrigger></Button.Triggers>
+   </Button>
+  </Grid>
+ </Grid>
+</ContentPage>
