@@ -1,0 +1,40 @@
+# Build and local tooling
+**/bin/
+**/obj/
+.vs/
+.idea/
+TestResults/
+*.user
+*.suo
+# Private data, audio, model weights and signing material
+/src/KodaMemo.Web/Data/
+*.db
+*.db3
+*.db3-*
+*.db-*
+*.sqlite*
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.bin
+*.gguf
+*.onnx
+*.apk
+*.aab
+*.jks
+*.keystore
+*.pfx
+*.p12
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+*secrets*.json
+*mcp_config*.json
+appsettings.Local.json
+local.properties
+# OS files
+.DS_Store
+Thumbs.db
