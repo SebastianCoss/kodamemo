@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/KodaMemo.Shared/KodaMemo.Shared.csproj" />
+    <Project Path="src/KodaMemo/KodaMemo.csproj" />
+    <Project Path="src/KodaMemo.Web/KodaMemo.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/KodaMemo.Tests/KodaMemo.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,20 @@
+name: Web and shared tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            11.0.x
+          include-prerelease: true
+      - name: Run web and shared tests
+        run: dotnet test tests/KodaMemo.Tests/KodaMemo.Tests.csproj --configuration Release
